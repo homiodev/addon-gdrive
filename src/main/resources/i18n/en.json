@@ -1,0 +1,9 @@
+{
+  "OAUTH2_AUTHENTICATE_title": "OAuth2 authenticate",
+  "selection": {
+    "GDriveEntity": "Google drive"
+  },
+  "workspace": {
+    "gdrive-storage": "Google Drive"
+  }
+}

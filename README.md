@@ -1,4 +1,4 @@
-# TouchHome Add-on: Google drive
+# homio Add-on: Google drive
 
 [![GitHub Release][releases-shield]][releases]
 
@@ -10,5 +10,5 @@ Google Drive cloud storage
 
 1. Workspace extension for save/load files
 
-[releases-shield]: https://img.shields.io/github/v/release/touchhome/addon-gdrive.svg
-[releases]: https://github.com/touchhome/addon-gdrive/releases
+[releases-shield]: https://img.shields.io/github/v/release/homiodev/addon-gdrive.svg
+[releases]: https://github.com/homiodev/addon-gdrive/releases

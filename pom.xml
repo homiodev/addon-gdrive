@@ -19,15 +19,15 @@
   <modelVersion>4.0.0</modelVersion>
   <name>Google drive</name>
   <packaging>jar</packaging>
-  
+
   <properties>
     <category>Storage</category>
   </properties>
 
   <parent>
     <artifactId>addon-parent</artifactId>
-    <groupId>org.touchhome</groupId>
-    <version>1.2.1</version>
+    <groupId>org.homio</groupId>
+    <version>1.2.3</version>
   </parent>
 
   <version>1.0.1-SNAPSHOT</version>

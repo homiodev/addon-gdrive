@@ -1,4 +1,4 @@
-package org.touchhome.bundle.gdrive;
+package org.homio.bundle.gdrive;
 
 import com.google.api.client.googleapis.auth.oauth2.GoogleCredential;
 import com.google.api.client.http.ByteArrayContent;
@@ -38,8 +38,8 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import org.touchhome.bundle.api.fs.FileSystemProvider;
-import org.touchhome.bundle.api.fs.TreeNode;
+import org.homio.bundle.api.fs.FileSystemProvider;
+import org.homio.bundle.api.fs.TreeNode;
 
 public class GDriveFileSystem implements FileSystemProvider {
 
@@ -468,7 +468,7 @@ public class GDriveFileSystem implements FileSystemProvider {
                     .setServiceAccountProjectId(credentials.getProjectId())
                     .build();*/
       this.drive = new Drive.Builder(HTTP_TRANSPORT, JSON_FACTORY, credential)
-          .setApplicationName("touchhome").build();
+          .setApplicationName("homio").build();
 
            /* this.drive =
                     new Drive.Builder(HTTP_TRANSPORT, JSON_FACTORY, getStoredCredentials()).setApplicationName(APPLICATION_NAME)

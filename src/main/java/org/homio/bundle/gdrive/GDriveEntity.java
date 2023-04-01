@@ -1,4 +1,4 @@
-package org.touchhome.bundle.gdrive;
+package org.homio.bundle.gdrive;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.nio.charset.StandardCharsets;
@@ -8,15 +8,15 @@ import org.apache.commons.io.IOUtils;
 import org.json.JSONObject;
 import org.springframework.http.MediaType;
 import org.springframework.web.multipart.MultipartFile;
-import org.touchhome.bundle.api.EntityContext;
-import org.touchhome.bundle.api.entity.storage.BaseFileSystemEntity;
-import org.touchhome.bundle.api.entity.types.StorageEntity;
-import org.touchhome.bundle.api.exception.NotFoundException;
-import org.touchhome.bundle.api.model.ActionResponseModel;
-import org.touchhome.bundle.api.ui.UISidebarChildren;
-import org.touchhome.bundle.api.ui.field.UIField;
-import org.touchhome.bundle.api.ui.field.action.UIContextMenuUploadAction;
-import org.touchhome.bundle.api.ui.field.action.v1.UIInputBuilder;
+import org.homio.bundle.api.EntityContext;
+import org.homio.bundle.api.entity.storage.BaseFileSystemEntity;
+import org.homio.bundle.api.entity.types.StorageEntity;
+import org.homio.bundle.api.exception.NotFoundException;
+import org.homio.bundle.api.model.ActionResponseModel;
+import org.homio.bundle.api.ui.UISidebarChildren;
+import org.homio.bundle.api.ui.field.UIField;
+import org.homio.bundle.api.ui.field.action.UIContextMenuUploadAction;
+import org.homio.bundle.api.ui.field.action.v1.UIInputBuilder;
 
 @Entity
 @UISidebarChildren(icon = "fab fa-google-drive", color = "#0DA10A")
@@ -161,7 +161,7 @@ public class GDriveEntity extends StorageEntity<GDriveEntity> implements BaseFil
                                 .setGoogleRefreshToken(credential.getRefreshToken()));
                         entityContext.ui().sendSuccessMessage("GDrive Oauth2 authenticate successful");
                     } catch (Exception ex) {
-                        String msg = TouchHomeUtils.getErrorMessage(ex);
+                        String msg = homioUtils.getErrorMessage(ex);
                         entityContext.save(setStatus(Status.ERROR).setStatusMessage(msg));
                         entityContext.ui().sendErrorMessage("Error during Oauth2 authenticate. " + msg);
                     }

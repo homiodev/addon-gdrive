@@ -95,7 +95,7 @@ public class GDriveEntity extends StorageEntity<GDriveEntity> implements BaseFil
     }
 
     public GDriveEntity setGoogleClientSecret(String value) {
-        return setJsonData("clientSecret", value);
+        return setJsonDataSecure("clientSecret", value);
     }
 
     @UIField(order = 50, hideInEdit = true)

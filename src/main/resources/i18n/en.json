@@ -5,5 +5,10 @@
   },
   "workspace": {
     "gdrive-storage": "Google Drive"
+  },
+  "help": {
+    "googleClientID": "Google Cloud Platform OAuth 2.0-Client Id",
+    "googleClientSecret": "Google Cloud Platform OAuth 2.0-Client Secret",
+    "googleAuthToken": "The auth-code is a one-time code needed to retrieve the necessary access-codes from Google Cloud Platform"
   }
 }

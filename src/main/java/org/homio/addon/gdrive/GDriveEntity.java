@@ -1,31 +1,44 @@
-package org.homio.bundle.gdrive;
+package org.homio.addon.gdrive;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import java.nio.charset.StandardCharsets;
-import javax.persistence.Entity;
+import com.google.api.client.json.GenericJson;
+import com.google.api.client.json.JsonObjectParser;
+import jakarta.persistence.Entity;
 import lombok.SneakyThrows;
 import org.apache.commons.io.IOUtils;
+import org.homio.api.Context;
+import org.homio.api.entity.storage.BaseFileSystemEntity;
+import org.homio.api.entity.types.StorageEntity;
+import org.homio.api.exception.NotFoundException;
+import org.homio.api.model.ActionResponseModel;
+import org.homio.api.ui.UISidebarChildren;
+import org.homio.api.ui.field.UIField;
+import org.homio.api.ui.field.action.UIContextMenuUploadAction;
+import org.homio.api.ui.field.action.v1.UIInputBuilder;
+import org.homio.api.util.Lang;
+import org.jetbrains.annotations.NotNull;
 import org.json.JSONObject;
 import org.springframework.http.MediaType;
 import org.springframework.web.multipart.MultipartFile;
-import org.homio.bundle.api.EntityContext;
-import org.homio.bundle.api.entity.storage.BaseFileSystemEntity;
-import org.homio.bundle.api.entity.types.StorageEntity;
-import org.homio.bundle.api.exception.NotFoundException;
-import org.homio.bundle.api.model.ActionResponseModel;
-import org.homio.bundle.api.ui.UISidebarChildren;
-import org.homio.bundle.api.ui.field.UIField;
-import org.homio.bundle.api.ui.field.action.UIContextMenuUploadAction;
-import org.homio.bundle.api.ui.field.action.v1.UIInputBuilder;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+
+import static org.homio.addon.gdrive.GDriveFileSystem.JSON_FACTORY;
+
+@SuppressWarnings("unused")
 @Entity
 @UISidebarChildren(icon = "fab fa-google-drive", color = "#0DA10A")
-public class GDriveEntity extends StorageEntity<GDriveEntity> implements BaseFileSystemEntity<GDriveEntity, GDriveFileSystem> {
-
-  public static final String PREFIX = "gdrive_";
+public class GDriveEntity extends StorageEntity implements BaseFileSystemEntity<GDriveFileSystem> {
 
   @Override
-  public String getFileSystemAlias() {
+  public @NotNull String getFileSystemRoot() {
+    return "/";
+  }
+
+  @Override
+  public @NotNull String getFileSystemAlias() {
     return "GDRIVE";
   }
 
@@ -44,9 +57,30 @@ public class GDriveEntity extends StorageEntity<GDriveEntity> implements BaseFil
     return "#90D80A";
   }
 
-  @UIField(order = 25, hideInEdit = true, copyButton = true)
+  @Override
+  public String getDescriptionImpl() {
+    if (!isHasCredentials()) {
+      return Lang.getServerMessage("GDRIVE_DESCRIPTION");
+    }
+    return null;
+  }
+
+  @UIField(order = 25, hideOnEmpty = true, hideInEdit = true)
   public String getEmail() {
-    return isHasCredentials() ? new JSONObject(getCredentials()).getString("client_email") : "NOT_FOUND";
+    try {
+      return isHasCredentials() ? new JSONObject(getCredentials()).getString("client_email") : "";
+    } catch (Exception ex) {
+      return ex.getMessage();
+    }
+  }
+
+  @UIField(order = 26, hideOnEmpty = true, hideInEdit = true)
+  public String getProjectId() {
+    try {
+      return isHasCredentials() ? new JSONObject(getCredentials()).getString("project_id") : "";
+    } catch (Exception ex) {
+      return ex.getMessage();
+    }
   }
 
   @UIField(order = 30, hideInEdit = true)
@@ -64,16 +98,20 @@ public class GDriveEntity extends StorageEntity<GDriveEntity> implements BaseFil
 
   @SneakyThrows
   @UIContextMenuUploadAction(value = "UPLOAD_CREDENTIALS", icon = "fas fa-upload",
-      supportedFormats = {MediaType.APPLICATION_JSON_VALUE})
-  public ActionResponseModel uploadCredentials(EntityContext entityContext, JSONObject params) {
+    supportedFormats = {MediaType.APPLICATION_JSON_VALUE})
+  public ActionResponseModel uploadCredentials(Context context, JSONObject params) {
     MultipartFile file = ((MultipartFile[]) params.get("files"))[0];
     String credentials = IOUtils.toString(file.getInputStream(), StandardCharsets.UTF_8);
-    setJsonData("credentials", credentials);
-    if (new GDriveFileSystem(GDriveEntity.this).restart(true)) {
-      entityContext.save(this);
-      return ActionResponseModel.showSuccess("ACTION.SUCCESS");
+    JsonObjectParser parser = new JsonObjectParser(JSON_FACTORY);
+    GenericJson fileContents =
+      parser.parseAndClose(new ByteArrayInputStream(credentials.getBytes()), StandardCharsets.UTF_8, GenericJson.class);
+    String fileType = (String) fileContents.get("type");
+    if (fileType == null) {
+      throw new IOException("Error reading credentials from stream, 'type' field not specified.");
     }
-    return ActionResponseModel.showError(this.getStatusMessage());
+    setJsonData("credentials", credentials);
+    context.db().save(this);
+    return ActionResponseModel.showSuccess("ACTION.SUCCESS");
   }
 
     /* public GDriveEntity setEmail(String value) {
@@ -117,8 +155,8 @@ public class GDriveEntity extends StorageEntity<GDriveEntity> implements BaseFil
     }*/
 
   @Override
-  public String getEntityPrefix() {
-    return PREFIX;
+  protected @NotNull String getDevicePrefix() {
+    return "gdrive";
   }
 
   @Override
@@ -128,13 +166,18 @@ public class GDriveEntity extends StorageEntity<GDriveEntity> implements BaseFil
   }
 
   @Override
-  public GDriveFileSystem buildFileSystem(EntityContext entityContext) {
+  public @NotNull GDriveFileSystem buildFileSystem(@NotNull Context context, int alias) {
     return new GDriveFileSystem(this);
   }
 
   @Override
   public long getConnectionHashCode() {
     return 0L;
+  }
+
+  @Override
+  public boolean isShowHiddenFiles() {
+    return true;
   }
 
   @Override

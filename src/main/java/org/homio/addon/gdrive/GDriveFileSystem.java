@@ -1,4 +1,4 @@
-package org.homio.bundle.gdrive;
+package org.homio.addon.gdrive;
 
 import com.google.api.client.googleapis.auth.oauth2.GoogleCredential;
 import com.google.api.client.http.ByteArrayContent;
@@ -16,6 +16,15 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.primitives.Bytes;
+import lombok.SneakyThrows;
+import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.tuple.Pair;
+import org.homio.api.fs.FileSystemProvider;
+import org.homio.api.fs.TreeNode;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -27,28 +36,21 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
-import lombok.SneakyThrows;
-import org.apache.commons.io.IOUtils;
-import org.apache.commons.lang3.StringUtils;
-import org.apache.commons.lang3.tuple.Pair;
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
-import org.homio.bundle.api.fs.FileSystemProvider;
-import org.homio.bundle.api.fs.TreeNode;
 
 public class GDriveFileSystem implements FileSystemProvider {
 
   public static final File ROOT = new File().setId("root").setName("root").setMimeType("application/vnd.google-apps.folder")
-      .setModifiedTime(new DateTime(0));
+    .setModifiedTime(new DateTime(0));
+  static final JsonFactory JSON_FACTORY = GsonFactory.getDefaultInstance();
   // private static final String REDIRECT_URI = "urn:ietf:wg:oauth:2.0:oob";
   // private static final List<String> SCOPES = Collections.singletonList(DriveScopes.DRIVE);
   private static final HttpTransport HTTP_TRANSPORT = new NetHttpTransport();
-  private static final JsonFactory JSON_FACTORY = GsonFactory.getDefaultInstance();
   private final LoadingCache<String, List<File>> fileCache;
   // private GoogleAuthorizationCodeFlow flow;
   private Drive drive;
@@ -62,19 +64,19 @@ public class GDriveFileSystem implements FileSystemProvider {
     this.entity = entity;
 
     this.fileCache = CacheBuilder.newBuilder().
-        expireAfterWrite(1, TimeUnit.HOURS).build(new CacheLoader<>() {
-          public List<File> load(@NotNull String id) {
+      expireAfterWrite(1, TimeUnit.HOURS).build(new CacheLoader<>() {
+        public @NotNull List<File> load(@NotNull String id) {
+          try {
+            return Collections.singletonList(getDrive().files().get(id).setFields("*").execute());
+          } catch (Exception ex) {
             try {
-              return Collections.singletonList(getDrive().files().get(id).setFields("*").execute());
-            } catch (Exception ex) {
-              try {
-                return getDrive().files().list().setQ("name = '" + id + "'").setFields("*").execute().getFiles();
-              } catch (Exception ignore) {
-              }
-              return Collections.emptyList();
+              return getDrive().files().list().setQ("name = '" + id + "'").setFields("*").execute().getFiles();
+            } catch (Exception ignore) {
             }
+            return Collections.emptyList();
           }
-        });
+        }
+      });
   }
 
     /*@SneakyThrows
@@ -172,24 +174,41 @@ public class GDriveFileSystem implements FileSystemProvider {
   }
 
   @Override
-  public void setEntity(Object entity) {
+  public void setEntity(@NotNull Object entity) {
     this.entity = (GDriveEntity) entity;
     restart(false);
   }
 
   @Override
-  public long getTotalSpace() {
+  public boolean exists(@NotNull String id) {
+    try {
+      File file = getDrive().files().get(id)
+        .setFields("id, trashed")
+        .execute();
+      return file != null && (file.getTrashed() == null || !file.getTrashed());
+    } catch (IOException e) {
+      return false;
+    }
+  }
+
+  @Override
+  public Long getTotalSpace() {
     return getAbout().getStorageQuota().getLimit();
   }
 
   @Override
-  public long getUsedSpace() {
+  public Long getUsedSpace() {
     return getAbout().getStorageQuota().getUsageInDrive();
   }
 
   @Override
+  public @NotNull String getFileSystemId() {
+    return entity.getEntityID();
+  }
+
+  @Override
   @SneakyThrows
-  public InputStream getEntryInputStream(@NotNull String id) {
+  public @NotNull InputStream getEntryInputStream(@NotNull String id) {
     try (InputStream stream = getDrive().files().get(id).executeMediaAsInputStream()) {
       return new ByteArrayInputStream(IOUtils.toByteArray(stream));
     }
@@ -197,14 +216,13 @@ public class GDriveFileSystem implements FileSystemProvider {
 
   private TreeNode buildTreeNode(File file) {
     boolean isDirectory = file.getMimeType().equals("application/vnd.google-apps.folder");
-    boolean hasChildren = true;
-    return new TreeNode(isDirectory, isDirectory && !hasChildren, file.getName(), file.getId(),
-        file.getSize(), file.getModifiedTime().getValue(), this, file.getMimeType());
+    return new TreeNode(isDirectory, !isDirectory, file.getName(), file.getId(),
+      file.getSize(), file.getModifiedTime().getValue(), this, file.getMimeType(), file.getId().hashCode());
   }
 
   @Override
   @SneakyThrows
-  public Set<TreeNode> toTreeNodes(Set<String> ids) {
+  public @NotNull Set<TreeNode> toTreeNodes(Set<String> ids) {
     Set<TreeNode> fmPaths = new HashSet<>();
     for (String id : ids) {
       for (File file : fileCache.get(id)) {
@@ -216,7 +234,7 @@ public class GDriveFileSystem implements FileSystemProvider {
 
   @Override
   @SneakyThrows
-  public TreeNode delete(@NotNull Set<String> ids) {
+  public @NotNull TreeNode delete(@NotNull Set<String> ids) {
     List<File> files = new ArrayList<>();
     for (String id : ids) {
       for (File file : fileCache.get(id)) {
@@ -293,8 +311,8 @@ public class GDriveFileSystem implements FileSystemProvider {
 
       if (uploadOption != UploadOption.Replace) {
         File existedFile =
-            Optional.ofNullable(fileCache.get(newName)).map(files1 -> files1.isEmpty() ? null : files1.get(0))
-                .orElse(null);
+          Optional.ofNullable(fileCache.get(newName)).map(files1 -> files1.isEmpty() ? null : files1.get(0))
+            .orElse(null);
         if (existedFile != null) {
           if (uploadOption == UploadOption.SkipExist) {
             return null;
@@ -351,7 +369,7 @@ public class GDriveFileSystem implements FileSystemProvider {
 
   @Override
   @SneakyThrows
-  public Set<TreeNode> getChildren(@NotNull String parentId) {
+  public @NotNull Set<TreeNode> getChildren(@NotNull String parentId) {
     String query = "('root' in parents or sharedWithMe = true) and trashed = false";
     if (!StringUtils.isEmpty(parentId)) {
       query = "'" + parentId + "' in parents";
@@ -366,10 +384,10 @@ public class GDriveFileSystem implements FileSystemProvider {
     List<File> files = new ArrayList<>();
     do {
       FileList result = getDrive().files().list()
-          .setQ(query)
-          .setFields("nextPageToken, files(id, parents, name, mimeType, modifiedTime, size)")
-          .setPageToken(pageToken)
-          .execute();
+        .setQ(query)
+        .setFields("nextPageToken, files(id, parents, name, mimeType, modifiedTime, size)")
+        .setPageToken(pageToken)
+        .execute();
       files.addAll(result.getFiles());
       pageToken = result.getNextPageToken();
     } while (pageToken != null);
@@ -380,7 +398,7 @@ public class GDriveFileSystem implements FileSystemProvider {
   }
 
   @Override
-  public TreeNode copy(@NotNull Collection<TreeNode> entries, @NotNull String targetId, UploadOption uploadOption) {
+  public @NotNull TreeNode copy(@NotNull Collection<TreeNode> entries, @NotNull String targetId, @NotNull UploadOption uploadOption) {
     List<File> result = new ArrayList<>();
     this.fileCache.invalidateAll();
     copyEntries(entries, targetId, uploadOption, result);
@@ -406,21 +424,20 @@ public class GDriveFileSystem implements FileSystemProvider {
           if (file != null) {
             if (uploadOption == UploadOption.Append) {
               content = Bytes.concat(
-                  IOUtils.toByteArray(getDrive().files().get(entry.getId()).executeMediaAsInputStream()),
-                  content);
+                IOUtils.toByteArray(getDrive().files().get(entry.getId()).executeMediaAsInputStream()),
+                content);
             }
             result.add(addToCache(getDrive().files().update(file.getId(), new File(),
-                new ByteArrayContent(null, content)).setFields("*").execute()));
+              new ByteArrayContent(null, content)).setFields("*").execute()));
           } else {
             File gDriveFile = new File();
             gDriveFile.setName(entry.getName());
             gDriveFile.setParents(Collections.singletonList(targetId));
             result.add(addToCache(getDrive().files().create(gDriveFile, new ByteArrayContent(null, content))
-                .setFields("*").execute()));
+              .setFields("*").execute()));
           }
         }
       } else {
-        // if (!optionalFile.isPresent()) {
         File gDriveFile = new File();
         gDriveFile.setName(entry.getName());
         gDriveFile.setParents(Collections.singletonList(targetId));
@@ -429,8 +446,7 @@ public class GDriveFileSystem implements FileSystemProvider {
         File newFolder = addToCache(getDrive().files().create(gDriveFile).setFields("*").execute());
         String parentTargetId = newFolder.getId();
         result.add(newFolder);
-        // }
-        copyEntries(entry.getFileSystem().getChildren(entry), parentTargetId, uploadOption, result);
+        copyEntries(Objects.requireNonNull(entry.getFileSystem()).getChildren(entry), parentTargetId, uploadOption, result);
       }
     }
   }
@@ -444,7 +460,7 @@ public class GDriveFileSystem implements FileSystemProvider {
   private File findFileByNameAndParent(String fileIdOrName, String targetFileOrFolder) throws ExecutionException {
     List<File> files = this.fileCache.get(fileIdOrName);
     return files.stream().filter(f -> f.getParents().contains(targetFileOrFolder))
-        .findAny().orElse(null);
+      .findAny().orElse(null);
   }
 
   private boolean isFile(File file) {
@@ -456,7 +472,7 @@ public class GDriveFileSystem implements FileSystemProvider {
     if (this.drive == null) {
       ByteArrayInputStream stream = new ByteArrayInputStream(entity.getCredentials().getBytes());
       GoogleCredential credential = GoogleCredential.fromStream(stream, HTTP_TRANSPORT, JSON_FACTORY)
-          .createScoped(Collections.singletonList(DriveScopes.DRIVE));
+        .createScoped(Collections.singletonList(DriveScopes.DRIVE));
             /*GoogleCredential credential = new GoogleCredential.Builder()
                     .setTransport(HTTP_TRANSPORT)
                     .setJsonFactory(JSON_FACTORY)
@@ -468,7 +484,7 @@ public class GDriveFileSystem implements FileSystemProvider {
                     .setServiceAccountProjectId(credentials.getProjectId())
                     .build();*/
       this.drive = new Drive.Builder(HTTP_TRANSPORT, JSON_FACTORY, credential)
-          .setApplicationName("homio").build();
+        .setApplicationName("homio").build();
 
            /* this.drive =
                     new Drive.Builder(HTTP_TRANSPORT, JSON_FACTORY, getStoredCredentials()).setApplicationName(APPLICATION_NAME)

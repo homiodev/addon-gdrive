@@ -2,11 +2,6 @@
   "SELECTION": {
     "GDriveEntity": "Google drive"
   },
-  "CONTEXT": {
-    "ACTION": {
-      "UPLOAD_CREDENTIALS": "Upload credentials"
-    }
-  },
   "field": {
     "projectId": "Project ID"
   }
